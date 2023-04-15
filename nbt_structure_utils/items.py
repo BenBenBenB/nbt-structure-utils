@@ -38,7 +38,7 @@ class ItemStack:
     count: int
     slot: int
     damage: int
-    enchantments: list[Enchantment]
+    enchantments: "list[Enchantment]"
 
     def __init__(
         self,
@@ -46,7 +46,7 @@ class ItemStack:
         count: int,
         slot: int,
         damage: int = None,
-        enchantments: list[Enchantment] = None,
+        enchantments: "list[Enchantment]" = None,
     ) -> None:
         self.id = item_id
         self.count = count
@@ -123,9 +123,9 @@ class ItemStack:
 
 class Inventory:
     container_name: str
-    items: list[ItemStack]
+    items: "list[ItemStack]"
 
-    def __init__(self, name, items: list[ItemStack] = []) -> None:
+    def __init__(self, name, items: "list[ItemStack]" = []) -> None:
         self.container_name = name
         self.items = items
 

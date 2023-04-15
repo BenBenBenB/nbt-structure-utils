@@ -3,9 +3,9 @@ from nbt.nbt import TAG_Compound, TAG_String
 
 class BlockData:
     name: str
-    properties: list[tuple]
+    properties: "list[tuple]"
 
-    def __init__(self, item_id: str, props: list[tuple] = []) -> None:
+    def __init__(self, item_id: str, props: "list[tuple]" = []) -> None:
         if ":" not in item_id:
             self.name = "minecraft:" + item_id
         else:

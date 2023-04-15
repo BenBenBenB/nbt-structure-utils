@@ -175,12 +175,12 @@ class Cuboid:
 
 # lines can be straight or curved.
 class LineSegment:
-    points: list[Vector]
+    points: "list[Vector]"
 
-    def __init__(self, points: list[Vector]) -> None:
+    def __init__(self, points: "list[Vector]") -> None:
         self.points = points
 
-    def draw_straight_lines(self) -> list[Vector]:
+    def draw_straight_lines(self) -> "list[Vector]":
         """Draw a straight 1 block wide from each point to the next in the list, like connect the dots.
 
         Raises:
@@ -197,7 +197,7 @@ class LineSegment:
         return list(set(points_on_line))
 
     # adapted from https://www.geeksforgeeks.org/bresenhams-algorithm-for-3-d-line-drawing/
-    def __bresenham3D(self, i) -> list[Vector]:  # noqa: C901, N802
+    def __bresenham3D(self, i) -> "list[Vector]":  # noqa: C901, N802
         """Draw a straight 1 block wide line between two points.
 
         Returns:

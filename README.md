@@ -15,11 +15,9 @@
 ### Edit blocks
 Example: create a 5x5x5 hollow cube of stone:
 ```python
-from nbt_structure_utils.NBTStructure import NBTStructure
-from nbt_structure_utils.plot_helpers import Vector
-from nbt_structure_utils.blocks import BlockData
+from nbt_structure_utils import NBTStructure, Vector, Cuboid, BlockData
 nbtstructure = NBTStructure()
 c1, c2 = Vector(0, 0, 0), Vector(4, 4, 4)
 nbtstructure.fill_hollow(Cuboid(c1, c2), BlockData("stone"))
-nbtstructure.get_nbt().write_file(filename="./output/test.nbt")
+nbtstructure.get_nbt().write_file(filename="C:/output/test.nbt")
 ```

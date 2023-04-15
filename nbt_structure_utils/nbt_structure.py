@@ -1,9 +1,9 @@
 from contextlib import suppress
 
-from blocks import BlockData
-from items import Inventory
+from .blocks import BlockData
+from .items import Inventory
 from nbt.nbt import NBTFile, TAG_Compound, TAG_Int, TAG_List
-from plot_helper import Cuboid, LineSegment, Vector
+from .plot_helper import Cuboid, LineSegment, Vector
 
 AIR_BLOCK = BlockData("minecraft:air")
 DATAVERSION = 3218
@@ -25,9 +25,9 @@ class Palette:
             return TAG_List representation of palette
     """
 
-    __blocks: list[BlockData]
+    __blocks: "list[BlockData]"
 
-    def __init__(self, block_data: list[BlockData] = []) -> None:
+    def __init__(self, block_data: "list[BlockData]" = []) -> None:
         self.__blocks = []
         self.extend(block_data.copy())
 
@@ -46,7 +46,7 @@ class Palette:
     def copy(self) -> None:
         return Palette(self.__blocks)
 
-    def extend(self, blocks: list[BlockData]) -> None:
+    def extend(self, blocks: "list[BlockData]") -> None:
         for block in blocks:
             self.try_append(block)
 
@@ -157,7 +157,7 @@ class NBTStructure:
             Replace all air blocks with voids
     """
 
-    blocks: dict[int, BlockPosition]
+    blocks: "dict[int, BlockPosition]"
     palette: Palette
 
     def __init__(self, filepath: str = None) -> None:
@@ -187,7 +187,6 @@ class NBTStructure:
                 inv = Inventory.load_from_nbt(b["nbt"])
             block = BlockPosition(pos, b["state"].value, inv)
             self.__set_block(block)
-
 
     def get_nbt(
         self, pressurize: bool = True, trim_excess_air: bool = False
@@ -231,8 +230,8 @@ class NBTStructure:
         new_structure = NBTStructure()
         for b in self.blocks.values():
             new_structure.set_block(b.pos, self.palette[b.state], b.inv)
-            self.blocks = new_structure.blocks
-            self.palette = new_structure.palette
+        self.blocks = new_structure.blocks
+        self.palette = new_structure.palette
 
     def get_block_state(self, pos: Vector) -> BlockData:
         """Get block name and properties at pos"""
