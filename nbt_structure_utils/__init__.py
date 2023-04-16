@@ -1,4 +1,4 @@
-from .nbt_structure import NBTStructure
 from .blocks import BlockData
-from .items import Enchantment, ItemStack, Inventory
-from .plot_helper import Vector, Cuboid, LineSegment
+from .items import Enchantment, Inventory, ItemStack
+from .nbt_structure import NBTStructure
+from .shapes import Cuboid, LineSegment, Vector

@@ -106,3 +106,6 @@ known-third-party = ["fastapi", "pydantic", "starlette"]
 
 [tool.ruff.per-file-ignores]
 "**/*model*.py" = ["N805"]
+
+[tool.isort]
+profile = "black"

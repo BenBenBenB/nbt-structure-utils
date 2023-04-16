@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from math import floor
 
 from nbt.nbt import TAG_Int, TAG_List
@@ -84,27 +85,74 @@ class Vector:
         return Vector(nbt.tags[0].value, nbt.tags[1].value, nbt.tags[2].value)
 
 
-class Cuboid:
+class Volume(ABC):
+    @abstractmethod
+    def __iter__(self) -> "list[Vector]":
+        """Iterate over all coordinates within the volume."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def __next__(self) -> Vector:
+        raise NotImplementedError
+
+    @abstractmethod
+    def contains(self, test_pos: Vector) -> bool:
+        """Return true if the input vector is within the volume."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def exterior_contains(self, test_pos: Vector) -> bool:
+        """Return true if the input coordinates are on any outside surface of the volume."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def interior_contains(self, test_pos: Vector) -> bool:
+        """Return true if the input coordinates are within the volume but not on the exterior."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def edge_contains(self, test_pos: Vector) -> bool:
+        """Return true if the input coordinates are on any outside edge of the volume."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def translate(self, delta: Vector) -> None:
+        """Move the volume. Add delta vector to every point."""
+        raise NotImplementedError
+
+    def exterior(self) -> "list[Vector]":
+        """Get all coordinates along the outside surface of the volume."""
+        return [pos.copy() for pos in iter(self) if self.exterior_contains(pos)]
+
+    def interior(self) -> "list[Vector]":
+        """Get all coordinates within the volume that are completely surrounded."""
+        return [pos.copy() for pos in iter(self) if self.interior_contains(pos)]
+
+    def edge(self) -> "list[Vector]":
+        """Get all coordinates along the outside edges of the volume."""
+        return [pos.copy() for pos in self if self.edge_contains(pos)]
+
+
+class Cuboid(Volume):
     """A 3D axis aligned box defined by blocks at two corners.
-    You can iterate through all Coordinates contained in the corners.
 
     Methods:
         copy: return copy of self
         size: return lengths of sides
         contains(coord): return true if coord is anywhere in or on cuboid
-        boundary_contains(coord): return true if coord is on a face of the cuboid
+        exterior_contains(coord): return true if coord is on a face of the cuboid
         edge_contains(coord): return true if coord is on an edge of the cuboid
     """
 
     min_corner: Vector
     max_corner: Vector
-
     __iter_pos: Vector
 
     def __init__(self, coord1: Vector, coord2: Vector) -> None:
+        super().__init__()
         self.min_corner, self.max_corner = Cuboid.__get_min_max_corners(coord1, coord2)
 
-    def __iter__(self) -> "Cuboid":
+    def __iter__(self) -> "list[Vector]":
         self.__iter_pos = self.min_corner.copy()
         self.__iter_pos.x -= 1
         return self
@@ -134,42 +182,45 @@ class Cuboid:
     def size(self) -> Vector:
         return self.max_corner - self.min_corner + Vector(1, 1, 1)
 
-    def contains(self, coord: Vector) -> bool:
+    def translate(self, delta: Vector) -> None:
+        self.min_corner += delta
+        self.max_corner += delta
+
+    def contains(self, test_pos: Vector) -> bool:
         return (
-            self.min_corner.x <= coord.x <= self.max_corner.x
-            and self.min_corner.y <= coord.y <= self.max_corner.y
-            and self.min_corner.z <= coord.z <= self.max_corner.z
+            self.min_corner.x <= test_pos.x <= self.max_corner.x
+            and self.min_corner.y <= test_pos.y <= self.max_corner.y
+            and self.min_corner.z <= test_pos.z <= self.max_corner.z
         )
 
-    def boundary_contains(self, coord: Vector) -> bool:
-        return self.contains(coord) and (
-            (coord.x == self.min_corner.x or coord.x == self.max_corner.x)
-            or (coord.y == self.min_corner.y or coord.y == self.max_corner.y)
-            or (coord.z == self.min_corner.z or coord.z == self.max_corner.z)
+    def exterior_contains(self, test_pos: Vector) -> bool:
+        return self.contains(test_pos) and (
+            (test_pos.x == self.min_corner.x or test_pos.x == self.max_corner.x)
+            or (test_pos.y == self.min_corner.y or test_pos.y == self.max_corner.y)
+            or (test_pos.z == self.min_corner.z or test_pos.z == self.max_corner.z)
         )
 
-    def edge_contains(self, coord: Vector) -> bool:
-        if not self.contains(coord):
+    def interior_contains(self, test_pos: Vector) -> bool:
+        return (
+            (self.min_corner.x < test_pos.x < self.max_corner.x)
+            and (self.min_corner.y < test_pos.y < self.max_corner.y)
+            and (self.min_corner.z < test_pos.z < self.max_corner.z)
+        )
+
+    def edge_contains(self, test_pos: Vector) -> bool:
+        if not self.contains(test_pos):
             return False
-        x_valid = coord.x == self.min_corner.x or coord.x == self.max_corner.x
-        y_valid = coord.y == self.min_corner.y or coord.y == self.max_corner.y
+        x_valid = test_pos.x == self.min_corner.x or test_pos.x == self.max_corner.x
+        y_valid = test_pos.y == self.min_corner.y or test_pos.y == self.max_corner.y
         if x_valid and y_valid:
             return True
-        z_valid = coord.z == self.min_corner.z or coord.z == self.max_corner.z
+        z_valid = test_pos.z == self.min_corner.z or test_pos.z == self.max_corner.z
         return (x_valid and z_valid) or (y_valid and z_valid)
 
     @staticmethod
-    def __get_min_max_corners(coord1: "Vector", coord2: "Vector") -> "Vector":
-        min_coord = Vector(
-            min([coord1.x, coord2.x]),
-            min([coord1.y, coord2.y]),
-            min([coord1.z, coord2.z]),
-        )
-        max_coord = Vector(
-            max([coord1.x, coord2.x]),
-            max([coord1.y, coord2.y]),
-            max([coord1.z, coord2.z]),
-        )
+    def __get_min_max_corners(c1: "Vector", c2: "Vector") -> "Vector":
+        min_coord = Vector(min([c1.x, c2.x]), min([c1.y, c2.y]), min([c1.z, c2.z]))
+        max_coord = Vector(max([c1.x, c2.x]), max([c1.y, c2.y]), max([c1.z, c2.z]))
         return min_coord, max_coord
 
 
@@ -181,7 +232,7 @@ class LineSegment:
         self.points = points
 
     def draw_straight_lines(self) -> "list[Vector]":
-        """Draw a straight 1 block wide from each point to the next in the list, like connect the dots.
+        """Draw a straight line 1 block wide from each point to the next in the list, like connect the dots.
 
         Raises:
             ValueError: Must have at least two points in list
@@ -189,15 +240,16 @@ class LineSegment:
         Returns:
             list[Vector]: A list of all points to be drawn for the line(s).
         """
-        points_on_line = []
+        points_on_lines = []
         if len(self.points) < 2:
             raise ValueError("Need at least two points.")
         for i in range(len(self.points) - 1):
-            points_on_line.extend(self.__bresenham3D(i))
-        return list(set(points_on_line))
+            new_line = self.__bresenham(i)
+            points_on_lines.extend(filter(lambda pos: pos not in self.points, new_line))
+        return points_on_lines
 
     # adapted from https://www.geeksforgeeks.org/bresenhams-algorithm-for-3-d-line-drawing/
-    def __bresenham3D(self, i) -> "list[Vector]":  # noqa: C901, N802
+    def __bresenham(self, i) -> "list[Vector]":  # noqa: C901
         """Draw a straight 1 block wide line between two points.
 
         Returns:
@@ -205,8 +257,8 @@ class LineSegment:
         """
         pointA = self.points[i].copy()
         pointB = self.points[i + 1].copy()
-        ListOfPoints = []
-        ListOfPoints.append(pointA.copy())
+        points_on_line = []
+        points_on_line.append(pointA.copy())
         dx = abs(pointB.x - pointA.x)
         dy = abs(pointB.y - pointA.y)
         dz = abs(pointB.z - pointA.z)
@@ -229,7 +281,7 @@ class LineSegment:
                     p2 -= 2 * dx
                 p1 += 2 * dy
                 p2 += 2 * dz
-                ListOfPoints.append(pointA.copy())
+                points_on_line.append(pointA.copy())
 
         # Driving axis is Y-axis"
         elif dy >= dx and dy >= dz:
@@ -245,7 +297,7 @@ class LineSegment:
                     p2 -= 2 * dy
                 p1 += 2 * dx
                 p2 += 2 * dz
-                ListOfPoints.append(pointA.copy())
+                points_on_line.append(pointA.copy())
 
         # Driving axis is Z-axis"
         else:
@@ -261,5 +313,5 @@ class LineSegment:
                     p2 -= 2 * dz
                 p1 += 2 * dy
                 p2 += 2 * dx
-                ListOfPoints.append(pointA.copy())
-        return ListOfPoints
+                points_on_line.append(pointA.copy())
+        return points_on_line

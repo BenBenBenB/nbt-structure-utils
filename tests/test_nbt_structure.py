@@ -1,9 +1,9 @@
-from nbt_structure_utils.plot_helper import Vector, Cuboid, LineSegment
-from nbt_structure_utils.blocks import BlockData
-from nbt_structure_utils.items import Inventory, Enchantment, ItemStack
-from nbt_structure_utils.nbt_structure import NBTStructure, AIR_BLOCK
 import pytest
 
+from nbt_structure_utils.blocks import BlockData
+from nbt_structure_utils.items import Enchantment, ItemStack
+from nbt_structure_utils.nbt_structure import AIR_BLOCK, NBTStructure
+from nbt_structure_utils.shapes import Cuboid, LineSegment, Vector
 
 coordinate_groups = [
     [Vector(0, 0, 0), Vector(3, 4, 5), Vector(1, 1, 1), Vector(2, 2, 2)],
@@ -34,7 +34,7 @@ def nbtstructure() -> NBTStructure:
 
 @pytest.fixture
 def nbtstructure_from_file() -> NBTStructure:
-    return NBTStructure("tests/nbt_structures/test_structure.nbt")
+    return NBTStructure("tests/nbt_files/test_structure.nbt")
 
 
 @pytest.fixture
@@ -121,12 +121,12 @@ def test_fill_hollow_cuboid(
     assert all(
         nbtstructure.get_block_state(pos) == AIR_BLOCK
         for pos in cuboid_vol
-        if not cuboid_vol.boundary_contains(pos)
+        if not cuboid_vol.exterior_contains(pos)
     )
     assert all(
         nbtstructure.get_block_state(pos) == block2
         for pos in cuboid_vol
-        if cuboid_vol.boundary_contains(pos)
+        if cuboid_vol.exterior_contains(pos)
     )
 
 
@@ -154,17 +154,17 @@ def test_fill_outline_cuboid(
     block2: BlockData,
 ) -> None:
     nbtstructure.fill(cuboid_vol, block1)
-    nbtstructure.fill_outline(cuboid_vol, block2)
+    nbtstructure.fill(cuboid_vol.exterior(), block2)
     assert has_no_blocks_outside_volume(nbtstructure, cuboid_vol)
     assert all(
         nbtstructure.get_block_state(pos) == block2
         for pos in cuboid_vol
-        if cuboid_vol.boundary_contains(pos)
+        if cuboid_vol.exterior_contains(pos)
     )
     assert all(
         nbtstructure.get_block_state(pos) == block1
         for pos in cuboid_vol
-        if not cuboid_vol.boundary_contains(pos)
+        if not cuboid_vol.exterior_contains(pos)
     )
 
 
@@ -176,7 +176,7 @@ def test_fill_frame(
     block2: BlockData,
 ) -> None:
     nbtstructure.fill(cuboid_vol, block1)
-    nbtstructure.fill_frame(cuboid_vol, block2)
+    nbtstructure.fill(cuboid_vol.edge(), block2)
     assert has_no_blocks_outside_volume(nbtstructure, cuboid_vol)
     assert all(
         nbtstructure.get_block_state(pos) == block2
@@ -214,16 +214,6 @@ def test_fill_replace(
         for pos in cuboid_vol_1
         if not cuboid_vol_2.contains(pos)
     )
-
-
-@pytest.mark.parametrize("lines", test_line_segments)
-def test_fill_line(
-    nbtstructure: NBTStructure, lines: LineSegment, block1: BlockData
-) -> None:
-    nbtstructure.fill_line(lines, block1)
-    expected_pos = lines.draw_straight_lines()
-    assert len(nbtstructure.blocks) == len(expected_pos)
-    assert all(nbtstructure.get_block_state(pos) == block1 for pos in expected_pos)
 
 
 @pytest.mark.parametrize("coord1,coord2", (test_coord_pairs))
@@ -284,17 +274,18 @@ def test_clone_structure(
 
 
 @pytest.mark.parametrize("cuboid_vol,delta", test_volume_vector)
-def test_shift(
+def test_translate(
     nbtstructure: NBTStructure, cuboid_vol: Cuboid, delta: Vector, block1: BlockData
 ) -> None:
     nbtstructure.fill(cuboid_vol, block1)
-    nbtstructure.shift(delta)
-    new_volume = Cuboid(cuboid_vol.min_corner + delta, cuboid_vol.max_corner + delta)
+    nbtstructure.translate(delta)
+    new_volume = cuboid_vol.copy()
+    new_volume.translate(delta)
     assert has_no_blocks_outside_volume(nbtstructure, new_volume)
     assert all(
         nbtstructure.get_block_state(pos) == block1
         for pos in new_volume
-        if cuboid_vol.boundary_contains(pos)
+        if cuboid_vol.contains(pos)
     )
 
 
