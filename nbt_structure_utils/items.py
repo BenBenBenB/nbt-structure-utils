@@ -46,13 +46,13 @@ class ItemStack:
         count: int,
         slot: int,
         damage: int = None,
-        enchantments: "list[Enchantment]" = None,
+        enchantments: "list[Enchantment]" = [],
     ) -> None:
         self.id = item_id
         self.count = count
         self.slot = slot
         self.damage = damage
-        self.enchantments = enchantments
+        self.enchantments = enchantments if enchantments else []
 
     def __eq__(self, __value: object) -> bool:
         if not (
@@ -81,13 +81,13 @@ class ItemStack:
         return nbt_item
 
     def __needs_tags(self) -> bool:
-        return (self.damage is not None) or (self.enchantments is not None)
+        return (self.damage is not None) or (self.enchantments)
 
     def __get_tag_nbt(self) -> TAG_Compound:
         nbt_tag = TAG_Compound(name="tag")
         if self.damage is not None:
             nbt_tag.tags.append(TAG_Int(name="Damage", value=self.damage))
-        if self.enchantments is not None:
+        if self.enchantments:
             nbt_enchantments = TAG_List(name="Enchantments", type=TAG_Compound)
             for enchant in self.enchantments:
                 nbt_enchantments.tags.append(enchant.get_nbt())
