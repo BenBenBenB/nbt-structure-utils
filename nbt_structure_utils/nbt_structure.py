@@ -29,8 +29,7 @@ class Palette:
     __blocks: "list[BlockData]"
 
     def __init__(self, block_data: "list[BlockData]" = []) -> None:
-        self.__blocks = []
-        self.extend(block_data.copy())
+        self.__blocks = [b.copy() for b in block_data]
 
     def __iter__(self) -> iter:
         return iter(self.__blocks)
@@ -65,6 +64,14 @@ class Palette:
         for block in self.__blocks:
             nbt_list.tags.append(block.get_nbt())
         return nbt_list
+
+    def reflect(self, reflector: Vector) -> None:
+        for block in self.__blocks:
+            block.reflect(
+                reflector.x is not None,
+                reflector.y is not None,
+                reflector.z is not None,
+            )
 
 
 class BlockPosition:
@@ -173,7 +180,9 @@ class NBTStructure:
         return structure
 
     def load_from_nbt(self, nbt: NBTFile) -> None:
-        self.palette = [BlockData.load_from_nbt(t) for t in nbt["palette"].tags]
+        self.palette = Palette(
+            [BlockData.load_from_nbt(t) for t in nbt["palette"].tags]
+        )
         self.blocks = {}
         for b in nbt["blocks"].tags:
             pos = Vector.load_from_nbt(b["pos"])
@@ -307,6 +316,37 @@ class NBTStructure:
             block.pos.add(delta)
             new_blocks[block.pos] = block
         self.blocks = new_blocks
+
+    def reflect(self, reflector: Vector) -> None:
+        """Mirror the structure on x, y, and z axis.
+
+        Specify x,y,z values to reflect around. Use None for x,y,z to not reflect values on that axis.
+        Update block states to swap north & south, east & west, up & down, etc.
+
+        Example input: reflector = Vector(1,None,-2)
+            :All Vector values of x = 1 stay the same, x==0 becomes 2, x==2 becomes 0, x==-1 becomes 3, etc.
+            :All y values stay the same.
+            :All Vector values of z = -2 stay the same, z==-3 becomes -1, z==-1 becomes 3, z==-4 becomes 0, etc.
+        """
+        if reflector == Vector(None, None, None):
+            return
+        reflection: "dict(int,BlockPosition)" = {}
+        for block in self.blocks.values():
+            new_pos = self.__get_reflected_pos(block.pos, reflector)
+            block.pos = new_pos
+            reflection[new_pos] = block
+        self.blocks = reflection
+        self.palette.reflect(reflector)
+
+    def __get_reflected_pos(self, pos: Vector, reflector: Vector) -> Vector:
+        new_pos = pos.copy()
+        if reflector.x is not None:
+            new_pos.x = 2 * reflector.x - pos.x
+        if reflector.y is not None:
+            new_pos.y = 2 * reflector.y - pos.y
+        if reflector.z is not None:
+            new_pos.z = 2 * reflector.z - pos.z
+        return new_pos
 
     def clone_structure(self, other: "NBTStructure", dest: Vector) -> None:
         """Completely clone other structure to this one. dest defines minimum x,y,z corner of target volume"""
