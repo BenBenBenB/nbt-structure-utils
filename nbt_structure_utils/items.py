@@ -1,3 +1,5 @@
+import copy
+
 from nbt.nbt import (
     TAG_Byte,
     TAG_Compound,
@@ -39,6 +41,7 @@ class ItemStack:
     slot: int
     damage: int
     enchantments: "list[Enchantment]"
+    other_tags: TAG_Compound
 
     def __init__(
         self,
@@ -47,12 +50,14 @@ class ItemStack:
         slot: int,
         damage: int = None,
         enchantments: "list[Enchantment]" = [],
+        other_tags: TAG_Compound = None,
     ) -> None:
         self.id = item_id
         self.count = count
         self.slot = slot
         self.damage = damage
         self.enchantments = enchantments if enchantments else []
+        self.other_tags = copy.deepcopy(other_tags)
 
     def __eq__(self, __value: object) -> bool:
         if not (
@@ -81,7 +86,11 @@ class ItemStack:
         return nbt_item
 
     def __needs_tags(self) -> bool:
-        return (self.damage is not None) or (self.enchantments)
+        return (
+            (self.damage is not None)
+            or (self.enchantments)
+            or (self.other_tags and self.other_tags.tags)
+        )
 
     def __get_tag_nbt(self) -> TAG_Compound:
         nbt_tag = TAG_Compound(name="tag")
@@ -92,6 +101,8 @@ class ItemStack:
             for enchant in self.enchantments:
                 nbt_enchantments.tags.append(enchant.get_nbt())
             nbt_tag.tags.append(nbt_enchantments)
+        if self.other_tags:
+            nbt_tag.tags.extend(self.other_tags.tags)
         return nbt_tag
 
     def copy(self) -> "ItemStack":
@@ -101,6 +112,7 @@ class ItemStack:
             slot=self.slot,
             damage=self.damage,
             enchantments=[e.copy() for e in self.enchantments],
+            other_tags=copy.deepcopy(self.other_tags),
         )
 
     @staticmethod
@@ -111,13 +123,17 @@ class ItemStack:
             slot=nbt["Slot"].value,
         )
         if "tag" in nbt:
-            if "Damage" in nbt["tag"]:
-                itemstack.damage = nbt["tag"]["Damage"].value
+            tag_nbt = copy.deepcopy(nbt["tag"])
+            if "Damage" in tag_nbt:
+                itemstack.damage = tag_nbt["Damage"].value
+                del tag_nbt["Damage"]
             if "Enchantments" in nbt["tag"]:
                 itemstack.enchantments = [
-                    Enchantment.load_from_nbt(e)
-                    for e in nbt["tag"]["Enchantments"].tags
+                    Enchantment.load_from_nbt(e) for e in tag_nbt["Enchantments"].tags
                 ]
+                del tag_nbt["Enchantments"]
+            if any(tag_nbt.tags):
+                itemstack.other_tags = tag_nbt
         return itemstack
 
 
