@@ -186,9 +186,13 @@ class NBTStructure:
     def __getitem__(self, key) -> BlockPosition:
         return self.blocks.get(key, None)
 
-    def copy(self) -> "NBTStructure":
+    def copy(self, volume: "list[Vector]" = None) -> "NBTStructure":
         structure = NBTStructure()
-        structure.blocks = {key: value.copy() for key, value in self.blocks.items()}
+        structure.blocks = {
+            key: value.copy()
+            for key, value in self.blocks.items()
+            if volume is None or value.pos in volume
+        }
         structure.palette = self.palette.copy()
         return structure
 
