@@ -14,6 +14,10 @@ class BlockData:
         ("south_east", "south_west"),
         ("north_west", "north_east"),
         ("south_west", "south_east"),
+        ("left", "right"),
+        ("right", "left"),
+        ("outer_left", "outer_right"),
+        ("outer_right", "outer_left"),
     ]
     __swap_y = [
         ("up", "down"),
@@ -36,7 +40,12 @@ class BlockData:
         ("south_east", "north_east"),
         ("north_west", "south_west"),
         ("south_west", "north_west"),
+        ("left", "right"),
+        ("right", "left"),
     ]
+
+    __rotation = ["_head", "_sign", "_banner"]
+    __not_rotation = ["_wall_sign"]
 
     def __init__(self, item_id: str, props: "list[tuple]" = []) -> None:
         if ":" not in item_id:
@@ -57,6 +66,8 @@ class BlockData:
 
     def reflect(self, reflect_x: bool, reflect_y: bool, reflect_z: bool) -> None:
         """Update block states to swap north & south, east & west, up & down, etc."""
+        if self.__uses_rotation_prop():
+            self.__reflect_rotation_prop(reflect_x, reflect_z)
         if self.properties:
             if reflect_x:
                 self.__reflect_states(self.__swap_x)
@@ -66,6 +77,8 @@ class BlockData:
                 self.__reflect_states(self.__swap_z)
 
     def __reflect_states(self, state_pairs) -> None:
+        if self.name.endswith("_wall"):
+            state_pairs = [p for p in state_pairs if p[0] != "up"]
         self.properties = [
             (
                 next((v[1] for v in state_pairs if prop[0] == v[0]), prop[0]),
@@ -73,6 +86,22 @@ class BlockData:
             )
             for prop in self.properties
         ]
+
+    def __uses_rotation_prop(self) -> bool:
+        return any(
+            postfix for postfix in self.__rotation if self.name.endswith(postfix)
+        ) and not any(
+            postfix for postfix in self.__not_rotation if self.name.endswith(postfix)
+        )
+
+    def __reflect_rotation_prop(self, reflect_x: bool, reflect_z: bool) -> None:
+        rotation = next((int(p[1]) for p in self.properties if p[0] == "rotation"), 0)
+        if reflect_x:
+            rotation = (16 - rotation) % 16
+        if reflect_z:
+            rotation = (24 - rotation) % 16
+        self.properties = [p for p in self.properties if p[0] != "rotation"]
+        self.properties.append(("rotation", rotation))
 
     def get_nbt(self) -> TAG_Compound:
         nbt_block_state = TAG_Compound()

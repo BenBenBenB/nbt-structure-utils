@@ -1,3 +1,4 @@
+import copy
 from abc import ABC, abstractmethod
 from math import floor
 
@@ -132,6 +133,15 @@ class Volume(ABC):
         """Get all coordinates along the outside edges of the volume."""
         return [pos.copy() for pos in self if self.edge_contains(pos)]
 
+    def would_clone_overlap(self, delta: Vector) -> bool:
+        """If you took the whole volume and shifted it by delta, would any new positions overlap old ones?"""
+        new_volume = self.copy()
+        new_volume.translate(delta)
+        return any(pos for pos in new_volume if self.contains(pos))
+
+    def copy(self) -> "Volume":
+        return copy.deepcopy(self)
+
 
 class Cuboid(Volume):
     """A 3D axis aligned box defined by blocks at two corners.
@@ -216,6 +226,11 @@ class Cuboid(Volume):
             return True
         z_valid = test_pos.z == self.min_corner.z or test_pos.z == self.max_corner.z
         return (x_valid and z_valid) or (y_valid and z_valid)
+
+    def would_clone_overlap(self, delta: Vector) -> bool:
+        min_pos = self.min_corner + Vector(1, 1, 1) - self.size()
+        max_pos = self.max_corner
+        return Cuboid(min_pos, max_pos).contains(delta)
 
     @staticmethod
     def __get_min_max_corners(c1: "Vector", c2: "Vector") -> "Vector":

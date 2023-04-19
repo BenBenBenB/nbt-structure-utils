@@ -70,7 +70,6 @@ def test_load_file(nbtstructure_from_file: NBTStructure) -> None:
     block = nbtstructure_from_file.get_block_state(Vector(0, 2, 0))
     inventory = nbtstructure_from_file.get_block_inventory(Vector(0, 2, 0))
     assert block == BlockData("dropper", [("facing", "down"), ("triggered", "true")])
-    assert inventory.container_name == "minecraft:dropper"
     assert len(inventory.items) == 1
     assert next(iter(inventory.items)) == ItemStack(
         item_id="minecraft:wooden_sword",

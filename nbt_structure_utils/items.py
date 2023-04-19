@@ -122,35 +122,29 @@ class ItemStack:
 
 
 class Inventory:
-    container_name: str
     items: "list[ItemStack]"
 
-    def __init__(self, name, items: "list[ItemStack]" = []) -> None:
-        self.container_name = name
+    def __init__(self, items: "list[ItemStack]" = []) -> None:
         self.items = items
 
     def get_nbt(self) -> TAG_Compound:
-        nbt_inv = TAG_Compound(name="nbt")
         nbt_inv_items = TAG_List(name="Items", type=TAG_Compound)
         for item in self.items:
             nbt_inv_items.tags.append(item.get_nbt())
-        nbt_inv.tags.append(nbt_inv_items)
-        nbt_inv.tags.append(TAG_String(name="id", value=self.container_name))
-        return nbt_inv
+        return nbt_inv_items
 
     def copy(self) -> "Inventory":
-        return Inventory(self.container_name, [i.copy() for i in self.items])
+        return Inventory([i.copy() for i in self.items])
 
     def __eq__(self, __value: object) -> bool:
-        if self.container_name != __value.container_name:
-            return False
         if len(self.items) != len(__value.items):
             return False
         return all(self.items.count(i) == __value.items.count(i) for i in self.items)
 
     @staticmethod
     def load_from_nbt(nbt: TAG_Compound) -> "Inventory":
+        if "Items" not in nbt:
+            return None
         return Inventory(
-            name=nbt["id"].value,
             items=[ItemStack.load_from_nbt(i) for i in nbt["Items"].tags],
         )
