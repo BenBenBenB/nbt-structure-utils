@@ -402,12 +402,14 @@ class NBTStructure:
     def clone_block(self, s_pos: Vector, t_pos: Vector) -> None:
         """Clone a single block from s_pos to t_pos"""
         block = self.__get_block(s_pos)
-        if block is None:
-            return
-        else:
-            return self.__set_block(
+
+        return (
+            None
+            if block is None
+            else self.__set_block(
                 BlockPosition(t_pos, block.state, block.inv, block.other_nbt)
             )
+        )
 
     def crop(self, volume: Cuboid) -> None:
         """Remove blocks outside of volume
