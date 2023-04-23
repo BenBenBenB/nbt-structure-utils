@@ -182,13 +182,13 @@ ADJACENCY_LIST = [
 class Volume(IVolume):
     """A custom volume with manually specified positions."""
 
-    positions: list[Vector]
+    positions: "list[Vector]"
 
-    def __init__(self, positions: Iterable[Vector]) -> None:
+    def __init__(self, positions: "Iterable[Vector]") -> None:
         super().__init__()
         self.positions = [pos.copy() for pos in positions]
 
-    def __iter__(self) -> Iterable[Vector]:
+    def __iter__(self) -> "Iterable[Vector]":
         return iter(self.positions)
 
     def __next__(self) -> Vector:
