@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nbt-structure-utils"
-version = "0.1.5"
+version = "0.1.6"
 description = "Create, read, and edit Minecraft NBT structure files."
 authors = ["Ben Burton <benjaminburtondev@gmail.com>"]
 license = "MIT"
@@ -29,8 +29,14 @@ classifiers = [
 python = "^3.8"
 nbt ="^1.5.1"
 
-[tool.poetry.dev-dependencies]
-pytest ="^7.3.0"
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.3.1"
+pytest-cov = "^4.0.0"
+black = "^23.3.0"
+isort = "^5.12.0"
+bandit = "^1.7.5"
+safety = "^2.3.5"
+ruff = "^0.0.262"
 
 [build-system]
 requires = ["poetry-core"]

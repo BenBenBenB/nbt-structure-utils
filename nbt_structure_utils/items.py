@@ -1,13 +1,6 @@
 import copy
 
-from nbt.nbt import (
-    TAG_Byte,
-    TAG_Compound,
-    TAG_Int,
-    TAG_List,
-    TAG_Short,
-    TAG_String,
-)
+from nbt.nbt import TAG_Byte, TAG_Compound, TAG_Int, TAG_List, TAG_Short, TAG_String
 
 
 class Enchantment:
