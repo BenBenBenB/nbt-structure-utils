@@ -1,13 +1,15 @@
 import copy
+from collections.abc import Iterable
 from contextlib import suppress
 
 from nbt.nbt import NBTFile, TAG_Compound, TAG_Int, TAG_List, TAG_String
 
 from .blocks import BlockData
 from .items import Inventory
-from .shapes import Cuboid, Vector, Volume
+from .shapes import Cuboid, IVolume, Vector
 
 AIR_BLOCK = BlockData("minecraft:air")
+EMPTY_SPACE = None
 DATAVERSION = 3218
 
 
@@ -15,21 +17,18 @@ class Palette:
     """Holds distinct list of blocks used in structure. BlockPosition 'state' refers to index from this list.
 
     Methods:
-        try_append(block):
-            adds a block if not in palette
-        extend(blocks):
-            adds any blocks not in palette
-        get_state(block):
-            return index of state that matches block
-        try_get_state(block):
-            return None or index of block
-        get_nbt():
-            return TAG_List representation of palette
+        get_state(block): Get index of state that matches block.
+        try_get_state(block): Get index of state that matches block, else None.
+        try_append(block): Add block if not in palette.
+        extend(blocks): Adds any blocks not in palette.
+        copy(): Return a copy of this palette.
+        reflect(reflector): Reflect block states across different planes.
+        get_nbt(): Get TAG_List representation of palette.
     """
 
     __blocks: "list[BlockData]"
 
-    def __init__(self, block_data: "list[BlockData]" = []) -> None:
+    def __init__(self, block_data: "Iterable[BlockData]" = []) -> None:
         self.__blocks = [b.copy() for b in block_data]
 
     def __iter__(self) -> iter:
@@ -39,34 +38,74 @@ class Palette:
         return self.__blocks[key]
 
     def try_append(self, block: BlockData) -> None:
-        if block is None:
+        """Add block if not in palette
+
+        Args:
+            block (BlockData): _description_
+
+        Raises:
+            ValueError: _description_
+        """
+        if block is EMPTY_SPACE:
             raise ValueError("Palette cannont contain None")
         if block not in self.__blocks:
             self.__blocks.append(block)
 
     def copy(self) -> None:
+        """Create and return a copy of this palette."""
         return Palette(self.__blocks)
 
-    def extend(self, blocks: "list[BlockData]") -> None:
+    def extend(self, blocks: "Iterable[BlockData]") -> None:
+        """Adds any blocks not in palette.
+
+        Args:
+            blocks (Iterable[BlockData]): list of block states
+        """
         for block in blocks:
             self.try_append(block)
 
     def get_state(self, block: BlockData) -> int:
+        """Get index of state that matches block.
+
+        Args:
+            block (BlockData): state to search for
+
+        Returns:
+            int: id corresponding to input state
+        """
         return self.__blocks.index(block)
 
     def try_get_state(self, block: BlockData) -> int:
+        """Get index of state that matches block, or return None.
+
+        Args:
+            block (BlockData): state to search for
+
+        Returns:
+            int: id corresponding to input state, or None
+        """
         try:
             return self.__blocks.index(block)
         except ValueError:
             return None
 
     def get_nbt(self) -> TAG_List:
+        """Get TAG_List representation of palette.
+
+        Returns:
+            TAG_List: NBT representing self.
+        """
         nbt_list = TAG_List(name="palette", type=TAG_Compound)
         for block in self.__blocks:
             nbt_list.tags.append(block.get_nbt())
         return nbt_list
 
     def reflect(self, reflector: Vector) -> None:
+        """Reflect block states across different planes.
+
+        Args:
+            reflector (Vector): determines which reflectable block states are updated.
+        """
         for block in self.__blocks:
             block.reflect(
                 reflector.x is not None,
@@ -76,7 +115,18 @@ class Palette:
 
 
 class BlockPosition:
-    """For use in NBTStructure. Stores block position, state from Palette, and inventory."""
+    """For use in NBTStructure. Stores block position, state from Palette, and inventory.
+
+    Attributes:
+        pos (Vector): x,y,z location of block.
+        state (int): state id from the palette.
+        inv (Inventory): inventory data.
+        other_nbt (TAG_Compound): non-inventory NBT.
+
+    Methods:
+        get_nbt(block_name): Get NBT representation of self.
+        copy(): Create a copy of self.
+    """
 
     pos: Vector
     state: int  # from Palette
@@ -90,6 +140,14 @@ class BlockPosition:
         inventory: Inventory = None,
         other_nbt: TAG_Compound = None,
     ) -> None:
+        """Create a new record of a block's data.
+
+        Args:
+            pos (Vector): x,y,z location of block.
+            state (int): state id from the palette.
+            inv (Inventory): inventory data.
+            other_nbt (TAG_Compound): non-inventory NBT.
+        """
         self.pos = pos.copy()
         self.state = state
         self.inv = None if inventory is None else inventory.copy()
@@ -99,6 +157,14 @@ class BlockPosition:
         return hash(self.pos)
 
     def get_nbt(self, block_name: str) -> TAG_Compound:
+        """Get the NBT for a block matching self.
+
+        Args:
+            block_name (str): input for saving inventory container name.
+
+        Returns:
+            TAG_Compound: NBT representing self.
+        """
         nbt_block = TAG_Compound()
         if any(i for i in [self.inv, self.other_nbt] if i is not None):
             nbt_block_nbt = TAG_Compound(name="nbt")
@@ -114,6 +180,7 @@ class BlockPosition:
         return nbt_block
 
     def copy(self) -> "BlockPosition":
+        """Create a copy of self."""
         new_inv = self.inv.copy() if self.inv else None
         return BlockPosition(
             pos=self.pos.copy(),
@@ -126,59 +193,77 @@ class BlockPosition:
 class NBTStructure:
     """Stores and manipulates list of block positions and states. Generates NBT file that can be imported to Minecraft.
 
-    Important Note:
-        Air will overwrite blocks with empty space when cloned in code or loaded in MC. Empty voids will not.
+    Important Note: Air will overwrite blocks with empty space when cloned in code or loaded in MC. Empty spaces will not.
+
+    Attributes:
+        blocks : dict[int, BlockPosition]
+            all the blocks and their data
+        palette : Palette
+            the block states
 
     Get Methods:
-        get_nbt(pressurize=True):
-            Get NBT file object of structure. Input pressurize=True to replace empty voids with air, the same way Minecraft itself would save.
-        get_block_state(pos) -> BlockData:
-            Get BlockData at pos from palette
-        get_block_inventory(pos) -> Inventory:
-            Get Inventory of block at pos
-        get_max_coords(include_air=True) -> Vector:
-            Get max x,y,z found across all blocks
-        get_min_coords(include_air=True) -> Vector:
-            Get min x,y,z found across all blocks
+        get_nbt(pressurize, trim_excess_air):
+            Get NBT file object of structure.
+        get_block_state(pos):
+            Get BlockData at pos from palette.
+        get_block_inventory(pos):
+            Get Inventory of block at pos.
+        get_block_other_nbt(pos):
+            Get Non-inventory NBT of block at pos.
+        get_max_coords(include_air):
+            Get max x,y,z found across all blocks.
+        get_min_coords(include_air):
+            Get min x,y,z found across all blocks.
 
     Fill Command Methods:
-        set_block(pos, block, inv: Inventory = None) -> bool:
+        set_block(pos, block, inv, other_nbt):
             Update block at position. Set as None to remove.
-        fill(volume: list[Vector], fill_block: BlockData, inv: Inventory = None):
+        fill(volume, fill_block, inv, other_nbt):
             Set all blocks in volume to fill_block.
-        fill_hollow(self, volume: Cuboid, fill_block: BlockData, inv: Inventory = None):
+        fill_hollow(self, volume, fill_block, inv, other_nbt):
             Fill all blocks along faces of cuboid to fill_block. Fill interior with air blocks.
-        fill_keep(self, volume: list[Vector], fill_block: BlockData, inv: Inventory = None):
-            Fill only air blocks and void spaces with fill_block. Leave others untouched.
-        fill_replace( volume: list[Vector], fill_block: BlockData, filter_blocks: list[BlockData], inv: Inventory = None):
-            Replace all instances of filter_block with fill_block in volume. Use None to target voids.
+        fill_keep(self, volume, fill_block, inv, other_nbt):
+            Fill only air blocks and empty spaces with fill_block. Leave others untouched.
+        fill_replace( volume, fill_block, filter_blocks, inv, other_nbt):
+            Replace all instances of filter_blocks with fill_block in volume. Use None to target empty space.
 
     Clone Command Methods:
-        clone_block(s_pos:Vector, t_pos:Vector):
+        clone_block(s_pos, t_pos):
             Clones a single block from one pos to another.
-        clone(volume: Cuboid, dest: Vector):
-            Clone blocks contained in source volume. Input dest is min x,y,z of target volume. Overlap is not allowed.
-        clone_structure(other: NBTStructure, dest: Vector):
-            Clone another NBTStructure object into this one. Input dest is min x,y,z of target volume.
+        clone(volume, dest):
+            Clone blocks contained in source volume. Overlap is not allowed.
+        clone_structure(other, dest, source_volume):
+            Clone all or part of another NBTStructure object into this one.
 
     Bulk Update Methods:
-        translate(delta: Vector):
-            Add delta vector to every block position.
-        crop(volume: Cuboid):
-            Remove blocks outside of volume
-        pressurize():
-            Replace all voids with air blocks
-        depressurize():
-            Replace all air blocks with voids
+        crop(volume):
+            Remove blocks outside of volume.
+        translate(delta):
+            Move entire structure by some distance.
+        reflect(reflector):
+            Mirror the structure over specific planes.
+        pressurize(volume):
+            Replace all empty spaces with air blocks.
+        depressurize(volume):
+            Replace all air blocks with empty spaces.
+
+    Static Methods:
+        load_from_nbt(nbt): Loads an NBT file from disk into self.
     """
 
     blocks: "dict[int, BlockPosition]"
     palette: Palette
 
     def __init__(self, filepath: str = None) -> None:
+        """Create a new object and optionally load it with data from disk.
+
+        Args:
+            filepath (str, optional): location of .nbt file to load. Defaults to None.
+        """
         if filepath is not None:
             nbt = NBTFile(filename=filepath)
-            self.load_from_nbt(nbt)
+            new_structure = NBTStructure.load_from_nbt(nbt)
+            self.__dict__.update(new_structure.__dict__)
         else:
             self.blocks = {}
             self.palette = Palette()
@@ -186,7 +271,15 @@ class NBTStructure:
     def __getitem__(self, key) -> BlockPosition:
         return self.blocks.get(key, None)
 
-    def copy(self, volume: "list[Vector]" = None) -> "NBTStructure":
+    def copy(self, volume: "Iterable[Vector]" = None) -> "NBTStructure":
+        """Create a new copy of all or part of self.
+
+        Args:
+            volume (Iterable[Vector], optional): Positions to allow in the copy. Defaults to None.
+
+        Returns:
+            NBTStructure: A copy of self.
+        """
         structure = NBTStructure()
         structure.blocks = {
             key: value.copy()
@@ -196,11 +289,21 @@ class NBTStructure:
         structure.palette = self.palette.copy()
         return structure
 
-    def load_from_nbt(self, nbt: NBTFile) -> None:
-        self.palette = Palette(
+    @staticmethod
+    def load_from_nbt(nbt: NBTFile) -> None:
+        """Loads an NBT file from disk into self.
+
+        Args:
+            nbt (NBTFile): The NBT file to read.
+
+        Returns:
+            NBTStructure : An object representing the NBT file.
+        """
+        structure = NBTStructure()
+        structure.palette = Palette(
             [BlockData.load_from_nbt(t) for t in nbt["palette"].tags]
         )
-        self.blocks = {}
+        structure.blocks = {}
         for b in nbt["blocks"].tags:
             pos = Vector.load_from_nbt(b["pos"])
             inv = None
@@ -215,47 +318,51 @@ class NBTStructure:
                 if not other_nbt.tags:
                     other_nbt = None
             block = BlockPosition(pos, b["state"].value, inv, other_nbt)
-            self.__set_block(block)
+            structure.__set_block(block)
+        return structure
 
     def get_nbt(
         self, pressurize: bool = True, trim_excess_air: bool = False
     ) -> NBTFile:
-        """Create NBTFile that can be saved to disk then loaded into Minecraft via a structure block. Default args will save like a structure block would.
+        """Create NBTFile representation of self.
+
+        Can be saved to disk then loaded into Minecraft via a structure block. Default args will save like a structure block would.
 
         Args:
-            pressurize (bool, optional):
-                Replace voids with air blocks so that structure loads like one created in minecraft would, as a full cuboid. Defaults to True.
-            trim_excess_air (bool, optional):
-                minimize size of structure by restricting to smallest cuboid containing all non-air blocks. Defaults to False.
+            pressurize (bool, optional): Replace empty space with air blocks. Defaults to True.
+            trim_excess_air (bool, optional): Minimize size by removing air outside of smallest cuboid. Defaults to False.
 
         Returns:
-            NBTFile: the complete structure
+            NBTFile: the complete NBT representation of the structure.
         """
+        # prepare and clean up copy
         working_copy = self.copy()
         min_coords = working_copy.get_min_coords(include_air=not trim_excess_air)
         max_coords = working_copy.get_max_coords(include_air=not trim_excess_air)
         if trim_excess_air:
             working_copy.crop(Cuboid(min_coords, max_coords))
-        working_copy.translate(min_coords * -1)
-        max_coords.sub(min_coords)
-        min_coords.sub(min_coords)
         if pressurize:
             working_copy.pressurize(Cuboid(min_coords, max_coords))
-
+        working_copy.translate(min_coords * -1)
         working_copy.cleanse_palette()
+
+        # generate file from copy
         structure_file = NBTFile()
-        size = max_coords + Vector(1, 1, 1)
+        size = max_coords - min_coords + Vector(1, 1, 1)
         structure_file.tags.append(size.get_nbt("size"))
         structure_file.tags.append(TAG_List(name="entities", type=TAG_Compound))
         nbt_blocks = TAG_List(name="blocks", type=TAG_Compound)
         for block in working_copy.blocks.values():
-            nbt_blocks.tags.append(block.get_nbt(self.palette[block.state].name))
+            nbt_blocks.tags.append(
+                block.get_nbt(working_copy.palette[block.state].name)
+            )
         structure_file.tags.append(nbt_blocks)
         structure_file.tags.append(working_copy.palette.get_nbt())
         structure_file.tags.append(TAG_Int(name="DataVersion", value=DATAVERSION))
         return structure_file
 
     def cleanse_palette(self) -> None:
+        """Remove any unused blocks from the palette."""
         new_structure = NBTStructure()
         for b in self.blocks.values():
             new_structure.set_block(b.pos, self.palette[b.state], b.inv, b.other_nbt)
@@ -263,19 +370,40 @@ class NBTStructure:
         self.palette = new_structure.palette
 
     def get_block_state(self, pos: Vector) -> BlockData:
-        """Get block name and properties at pos"""
+        """Get block name and properties at pos.
+
+        Args:
+            pos (Vector): x, y, z position to search.
+
+        Returns:
+            BlockData: block name and properties at pos.
+        """
         block = self.__get_block(pos)
-        return None if block is None else self.palette[block.state]
+        return None if block is EMPTY_SPACE else self.palette[block.state]
 
     def get_block_inventory(self, pos: Vector) -> Inventory:
-        """Get inventory at pos"""
-        block = self.__get_block(pos)
-        return None if block is None else block.inv
+        """Get block inventory at pos.
 
-    def get_block_other_nbt(self, pos: Vector) -> Inventory:
-        """Get non-inventory block nbt at pos"""
+        Args:
+            pos (Vector): x, y, z position to search.
+
+        Returns:
+            Inventory: Inventory at pos, if any.
+        """
         block = self.__get_block(pos)
-        return None if block is None else block.other_nbt
+        return None if block is EMPTY_SPACE else block.inv
+
+    def get_block_other_nbt(self, pos: Vector) -> TAG_Compound:
+        """Get non-inventory block nbt at pos.
+
+        Args:
+            pos (Vector): x, y, z position to search.
+
+        Returns:
+            Inventory: Block nbt at pos, if any.
+        """
+        block = self.__get_block(pos)
+        return None if block is EMPTY_SPACE else block.other_nbt
 
     def __get_block(self, pos: Vector) -> BlockPosition:
         return self.blocks.get(pos, None)
@@ -287,8 +415,15 @@ class NBTStructure:
         inv: Inventory = None,
         other_nbt: TAG_Compound = None,
     ) -> None:
-        """Update block at pos. Remove if block is None."""
-        if block is None:
+        """Update block at pos. Remove if block is None.
+
+        Args:
+            pos (Vector): Location to place block.
+            block (BlockData): Block's name and state to save in palette.
+            inv (Inventory, optional): Inventory to be set. Defaults to None.
+            other_nbt (TAG_Compound, optional):  Non-inventory NBT data to be set. Defaults to None.
+        """
+        if block is EMPTY_SPACE:
             return self.__remove_block(pos)
         state = self.__upsert_palette(block)
         return self.__set_block(BlockPosition(pos, state, inv, other_nbt))
@@ -301,14 +436,28 @@ class NBTStructure:
             self.blocks.pop(pos)
 
     def __upsert_palette(self, new_block: BlockData) -> int:
-        """adds block to palette and/or returns the state id"""
-        if new_block is None:
+        """Adds block to palette and/or returns the state id.
+
+        Parameters:
+            new_block (BlockData): Block's name and state to save in palette.
+
+        Returns:
+            int: Integer value corresponding to the block state.
+        """
+        if new_block is EMPTY_SPACE:
             return None
         self.palette.try_append(new_block)
         return self.palette.get_state(new_block)
 
     def get_max_coords(self, include_air=True) -> Vector:
-        """get max x,y,z of smallest cuboid containing all blocks"""
+        """Get maximum x,y,z of smallest cuboid containing all blocks.
+
+        Args:
+            include_air (bool, optional): Allows air blocks in search. Defaults to True.
+
+        Returns:
+            Vector: Max x, y, and z values found in structure.
+        """
         if not self.blocks:
             return Vector(0, 0, 0)
         filter_state = None if include_air else self.palette.try_get_state(AIR_BLOCK)
@@ -324,7 +473,14 @@ class NBTStructure:
         return Vector(x, y, z)
 
     def get_min_coords(self, include_air=True) -> Vector:
-        """get min x,y,z of smallest cuboid containing all blocks"""
+        """Get minimum x,y,z of smallest cuboid containing all blocks.
+
+        Args:
+            include_air (bool, optional): Allows air blocks in search. Defaults to True.
+
+        Returns:
+            Vector: Max x, y, and z values found in structure.
+        """
         if not self.blocks:
             return Vector(0, 0, 0)
         filter_state = None if include_air else self.palette.try_get_state(AIR_BLOCK)
@@ -340,7 +496,11 @@ class NBTStructure:
         return Vector(x, y, z)
 
     def translate(self, delta: Vector) -> None:
-        """Add delta to every block's pos"""
+        """Move entire structure by some distance.
+
+        Parameters:
+            delta (Vector): x,y,z values to add to every position in structure.
+        """
         if delta == Vector(0, 0, 0):
             return
         new_blocks = {}
@@ -350,15 +510,17 @@ class NBTStructure:
         self.blocks = new_blocks
 
     def reflect(self, reflector: Vector) -> None:
-        """Mirror the structure on x, y, and z axis.
+        """Mirror the structure over specific planes.
 
-        Specify x,y,z values to reflect around. Use None for x,y,z to not reflect values on that axis.
-        Update block states to swap north & south, east & west, up & down, etc.
+        Swap blocks around and update states to swap north & south, up & down, etc.
+
+        Parameters:
+            reflector (Vector): x,y,z values to reflect around. Use None to not reflect on that axis.
 
         Example input: reflector = Vector(1,None,-2)
-            :All Vector values of x = 1 stay the same, x==0 becomes 2, x==2 becomes 0, x==-1 becomes 3, etc.
-            :All y values stay the same.
-            :All Vector values of z = -2 stay the same, z==-3 becomes -1, z==-1 becomes 3, z==-4 becomes 0, etc.
+            x: values at x = 1 stay the same, x=0 becomes 2, x=2 becomes 0, x=-1 becomes 3, etc.
+            y: values stay the same.
+            z: values at z = -2 stay the same, z=-3 becomes -1, z=-1 becomes 3, z=-4 becomes 0, etc.
         """
         if reflector == Vector(None, None, None):
             return
@@ -380,19 +542,39 @@ class NBTStructure:
             new_pos.z = 2 * reflector.z - pos.z
         return new_pos
 
-    def clone_structure(self, other: "NBTStructure", dest: Vector) -> None:
-        """Completely clone other structure to this one. dest defines minimum x,y,z corner of target volume"""
-        for otherblock in other.blocks.values():
-            dest_pos = otherblock.pos + dest
-            self.set_block(
-                dest_pos,
-                other.palette[otherblock.state],
-                otherblock.inv,
-                otherblock.other_nbt,
-            )
+    def clone_structure(
+        self,
+        other: "NBTStructure",
+        dest: Vector,
+        source_volume: "Iterable[Vector]" = None,
+    ) -> None:
+        """Clone blocks from another structure to this one.
 
-    def clone(self, source_volume: Volume, dest: Vector) -> None:
-        """Clones blocks from source_volume. dest defines minimum x,y,z of target volume which must not overlap source."""
+        Args:
+            other (NBTStructure): Structure from which to clone blocks.
+            dest (Vector): Position in self that corresponds to 0,0,0 in other structure.
+            source_volume (Iterable[Vector], optional): Restricts positions to copy from other. Defaults to None.
+        """
+        for otherblock in other.blocks.values():
+            if source_volume is None or otherblock.pos in source_volume:
+                dest_pos = otherblock.pos + dest
+                self.set_block(
+                    dest_pos,
+                    other.palette[otherblock.state],
+                    otherblock.inv,
+                    otherblock.other_nbt,
+                )
+
+    def clone(self, source_volume: IVolume, dest: Vector) -> None:
+        """Clones blocks from self. dest defines minimum x,y,z of target volume. Must not overlap source volume.
+
+        Args:
+            source_volume (IVolume): Position of block to copy.
+            dest (Vector): Position of block to update.
+
+        Raises:
+            ValueError: Overlap error.
+        """
         if source_volume.would_clone_overlap(dest):
             raise ValueError("The source and destination volumes cannot overlap")
         offset = dest - source_volume.min_corner
@@ -400,35 +582,45 @@ class NBTStructure:
             self.clone_block(pos, pos + offset)
 
     def clone_block(self, s_pos: Vector, t_pos: Vector) -> None:
-        """Clone a single block from s_pos to t_pos"""
+        """Clone a single block.
+
+        Args:
+            s_pos (Vector): Position of block to copy.
+            t_pos (Vector): Position of block to update.
+        """
         block = self.__get_block(s_pos)
 
         return (
             None
-            if block is None
+            if block is EMPTY_SPACE
             else self.__set_block(
                 BlockPosition(t_pos, block.state, block.inv, block.other_nbt)
             )
         )
 
-    def crop(self, volume: Cuboid) -> None:
-        """Remove blocks outside of volume
+    def crop(self, volume: "Iterable[Vector]") -> None:
+        """Remove all blocks outside of input positions.
 
         Args:
-            volume (Cuboid): defines corners of desired box
+            volume (Iterable[Vector]): Gives list of positions that will remain.
         """
         for k, v in self.blocks.copy().items():
             if not volume.contains(v.pos):
                 self.blocks.pop(k)
 
     def size(self) -> Vector:
+        """Get the length of the 3 sides of the smallest cuboid that contains all blocks.
+
+        Returns:
+            Vector: x, y, and z side lengths of the structure.
+        """
         if not any(self.blocks):
             return Vector(0, 0, 0)
         return Vector(1, 1, 1) + self.get_max_coords() - self.get_min_coords()
 
     def fill(
         self,
-        volume: "list[Vector]",
+        volume: "Iterable[Vector]",
         fill_block: BlockData,
         inv: Inventory = None,
         other_nbt: TAG_Compound = None,
@@ -436,20 +628,21 @@ class NBTStructure:
         """Set all blocks in volume to fill_block.
 
         Args:
-            volume (list[Vector]): iterable with all positions contained in volume
-            fill_block (BlockData): block to set. Use None to remove blocks.
-            inv (Inventory): inventory to set, only if block is being set too.
+            volume (Iterable[Vector]): Positions to update.
+            fill_block (BlockData): Block to set. Use None to remove blocks.
+            inv (Inventory, optional): Inventory to set. Defaults to None.
+            other_nbt (TAG_Compound, optional): Non-inventory NBT data. Defaults to None.
         """
         new_state = self.__upsert_palette(fill_block)
         for pos in volume:
-            if new_state is None:
+            if new_state is EMPTY_SPACE:
                 self.__remove_block(pos)
             else:
                 self.__set_block(BlockPosition(pos, new_state, inv, other_nbt))
 
     def fill_hollow(
         self,
-        volume: Volume,
+        volume: IVolume,
         fill_block: BlockData,
         inv: Inventory = None,
         other_nbt: TAG_Compound = None,
@@ -457,69 +650,85 @@ class NBTStructure:
         """Fill all blocks on exterior with fill_block. Fill interior with air.
 
         Args:
-            volume (Volume): gives list of exterior and interior positions to update
-            fill_block (BlockData): block to set. Use None to remove blocks.
+            volume (IVolume): Gives interior and exterior positions to update.
+            fill_block (BlockData): Block to set. Use None to remove blocks.
+            inv (Inventory, optional): Inventory to set. Defaults to None.
+            other_nbt (TAG_Compound, optional): Non-inventory NBT data. Defaults to None.
         """
         self.fill(volume.exterior(), fill_block, inv, other_nbt)
         self.fill(volume.interior(), AIR_BLOCK)
 
-    def pressurize(self, volume: "list[Vector]" = None) -> None:
-        """Fill all voids with air. Use this to make sure existing blocks are removed when loading into Minecraft or cloning."""
+    def pressurize(self, volume: "Iterable[Vector]" = None) -> None:
+        """Fill all empty space with air.
+
+        Use this to make sure existing blocks are removed when loading into Minecraft or cloning.
+
+        Args:
+            volume (Iterable[Vector], optional): Limits the positions that may be set to air. Defaults to None.
+        """
         if volume is None:
             volume = self.get_full_cuboid_volume()
         return self.fill_keep(volume, AIR_BLOCK)
 
-    def depressurize(self, volume: "list[Vector]" = None) -> None:
-        """Remove all air blocks in volume. This allows you to load in MC and clone without air overwriting existing blocks in target volume."""
+    def depressurize(self, volume: "Iterable[Vector]" = None) -> None:
+        """Remove all air blocks.
+
+        Args:
+            volume (Iterable[Vector], optional): Limits the positions that may be removed. Defaults to None.
+        """
         if volume is None:
             volume = self.get_full_cuboid_volume()
         return self.fill_keep(volume, None)
 
     def get_full_cuboid_volume(self, include_air=True) -> Cuboid:
+        """Get the smallest cuboid that contains the full structure.
+
+        Args:
+            include_air (bool, optional): Allows air blocks in search. Defaults to True.
+
+        Returns:
+            Cuboid: A representation of the structure's volume.
+        """
         return Cuboid(
             self.get_min_coords(include_air), self.get_max_coords(include_air)
         )
 
     def fill_keep(
         self,
-        volume: "list[Vector]",
+        volume: "Iterable[Vector]",
         fill_block: BlockData,
         inv: Inventory = None,
         other_nbt: TAG_Compound = None,
     ) -> None:
-        """Fill only air blocks and void spaces with fill_block. Leave others untouched.
+        """Fill only air blocks and empty spaces with fill_block. Leave others untouched.
 
         Args:
-            volume (list[Vector]):
-                volume to search
-            fill_block (BlockData):
-                use fill_block = None to remove all air blocks
-            inv (Inventory):
-                inventory to be set for blocks
+            volume (Iterable[Vector]): Positions to update.
+            fill_block (BlockData): Block to set. Use None to remove blocks.
+            inv (Inventory, optional): Inventory to set. Defaults to None.
+            other_nbt (TAG_Compound, optional): Non-inventory NBT data. Defaults to None.
         """
         self.fill_replace(volume, fill_block, [None, AIR_BLOCK], inv, other_nbt)
 
     def fill_replace(
         self,
-        volume: "list[Vector]",
+        volume: "Iterable[Vector]",
         fill_block: BlockData,
-        filter_blocks: "list[BlockData]",
+        filter_blocks: "Iterable[BlockData]",
         inv: Inventory = None,
         other_nbt: TAG_Compound = None,
     ) -> None:
-        """Replace all instances of filter blocks with fill block in volume. Use None to target voids.
-        Args:
-            volume (list[Vector]):
-                volume to search
-            fill_block (BlockData):
-                use fill_block = None to remove all air blocks
-            filter_blocks "BlockData|list[BlockData]":
-                List of block data to search for. Can include fill_block. Include None to fill empty space.
-            inv (Inventory):
-                inventory to be set for blocks
+        """Replace all instances of filter blocks with fill block in volume. Use None to target empty space.
+
+        Parameters:
+            volume (Iterable[Vector]): Positions to update.
+            fill_block (BlockData): Block to set. Use None to remove blocks.
+            filter_blocks (Iterable[BlockData]): List of block data to search for. Can include fill_block. Include None to fill empty space
+            inv (Inventory, optional): Inventory to set. Defaults to None.
+            other_nbt (TAG_Compound, optional): Non-inventory NBT data. Defaults to None.
         """
         if not isinstance(filter_blocks, list) and (
-            isinstance(filter_blocks, BlockData) or filter_blocks is None
+            isinstance(filter_blocks, BlockData) or filter_blocks is EMPTY_SPACE
         ):
             filter_blocks = [filter_blocks]
 
@@ -530,10 +739,10 @@ class NBTStructure:
 
         for pos in volume:
             block = self.__get_block(pos)
-            if block is None and None in filter_states:
+            if block is EMPTY_SPACE and None in filter_states:
                 self.__set_block(BlockPosition(pos.copy(), new_state, inv, other_nbt))
             elif block is not None and block.state in filter_states:
-                if new_state is None:
+                if new_state is EMPTY_SPACE:
                     self.__remove_block(pos)
                 else:
                     block.state = new_state

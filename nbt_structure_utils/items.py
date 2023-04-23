@@ -1,9 +1,17 @@
 import copy
+from collections.abc import Iterable
 
 from nbt.nbt import TAG_Byte, TAG_Compound, TAG_Int, TAG_List, TAG_Short, TAG_String
 
 
 class Enchantment:
+    """Represents and gets NBT for an enchantment.
+
+    Attributes:
+        id (int): Enchantment name
+        lvl (int): Enchantment level
+    """
+
     id: str
     lvl: int
 
@@ -15,20 +23,40 @@ class Enchantment:
         return self.id == __value.id and self.lvl == __value.lvl
 
     def get_nbt(self) -> TAG_Compound:
+        """Get the nbt representation of the enchantment."""
         nbt_enchant = TAG_Compound()
         nbt_enchant.tags.append(TAG_Short(name="lvl", value=self.lvl))
         nbt_enchant.tags.append(TAG_String(name="id", value=self.id))
         return nbt_enchant
 
     def copy(self) -> "Enchantment":
+        """Create a copy of self."""
         return Enchantment(self.id, self.lvl)
 
     @staticmethod
     def load_from_nbt(nbt: TAG_Compound) -> "Enchantment":
+        """Create an equivalent Enchantment object from existing NBT."""
         return Enchantment(id=nbt["id"].value, lvl=nbt["lvl"].value)
 
 
 class ItemStack:
+    """Represents and gets NBT for a stack of items.
+
+    Attributes:
+        id : int
+            Item name.
+        count : int
+            Number of Items.
+        slot : int
+            Position in inventory.
+        damage : int
+            Damage, if any.
+        enchantments : list[Enchantment]
+            enchantments on the item, if any
+        other_tags: TAG_Compound
+            any other NBT values on the item(s)
+    """
+
     id: str
     count: int
     slot: int
@@ -70,6 +98,7 @@ class ItemStack:
             )
 
     def get_nbt(self) -> TAG_Compound:
+        """Get the nbt representation of the item stack."""
         nbt_item = TAG_Compound()
         nbt_item.tags.append(TAG_Byte(name="Slot", value=self.slot))
         nbt_item.tags.append(TAG_String(name="id", value=self.id))
@@ -99,6 +128,7 @@ class ItemStack:
         return nbt_tag
 
     def copy(self) -> "ItemStack":
+        """Get a copy of the item stack."""
         return ItemStack(
             item_id=self.id,
             count=self.count,
@@ -110,6 +140,7 @@ class ItemStack:
 
     @staticmethod
     def load_from_nbt(nbt: TAG_Compound) -> "ItemStack":
+        """Create an equivalent ItemStack object from existing NBT."""
         itemstack = ItemStack(
             item_id=nbt["id"].value,
             count=nbt["Count"].value,
@@ -131,18 +162,27 @@ class ItemStack:
 
 
 class Inventory:
+    """Represents and gets NBT for all item stacks in an inventory.
+
+    Attributes:
+        items: list[ItemStack]
+            All items in the inventory.
+    """
+
     items: "list[ItemStack]"
 
-    def __init__(self, items: "list[ItemStack]" = []) -> None:
-        self.items = items
+    def __init__(self, items: "Iterable[ItemStack]" = []) -> None:
+        self.items = [i.copy() for i in items]
 
     def get_nbt(self) -> TAG_Compound:
+        """Get the nbt representation of the inventory."""
         nbt_inv_items = TAG_List(name="Items", type=TAG_Compound)
         for item in self.items:
             nbt_inv_items.tags.append(item.get_nbt())
         return nbt_inv_items
 
     def copy(self) -> "Inventory":
+        """Get a copy of the inventory."""
         return Inventory([i.copy() for i in self.items])
 
     def __eq__(self, __value: object) -> bool:
@@ -152,6 +192,7 @@ class Inventory:
 
     @staticmethod
     def load_from_nbt(nbt: TAG_Compound) -> "Inventory":
+        """Create an equivalent Inventory object from existing NBT."""
         if "Items" not in nbt:
             return None
         return Inventory(

@@ -1,11 +1,26 @@
 import copy
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from math import floor
 
 from nbt.nbt import TAG_Int, TAG_List
 
 
 class Vector:
+    """The 3D coordiantes of a position. Can create and read NBT.
+
+    Methods:
+        get_nbt(self, tag_name: str) -> TAG_List:
+        copy(): Create a copy of self.
+        add(__o): Add x, y, and z to self x, y, and z.
+        sub(__o): Subtract x, y, and z to self x, y, and z.
+        dot(__o): Calculate dot product of self and other vector.
+        cross(__o): Calculate cross product of self and other vector.
+
+    Static Methods:
+        load_from_nbt(nbt): From NBT, load x, y, and z into a Vector
+    """
+
     x: int
     y: int
     z: int
@@ -23,6 +38,14 @@ class Vector:
         return hash((self.x, self.y, self.z))
 
     def get_nbt(self, tag_name: str) -> TAG_List:
+        """Create a new NBT Tag for the position.
+
+        Args:
+            tag_name (str): name to save for the new NBT tag.
+
+        Returns:
+            TAG_List: _description_
+        """
         x, y, z = self.x, self.y, self.z
         # structures larger than 32x32x32 are allowed, just need to lie about the size
         if tag_name == "size":
@@ -50,32 +73,33 @@ class Vector:
         if isinstance(__o, int):
             return Vector(self.x * __o, self.y * __o, self.z * __o)
         else:
-            raise ValueError("Must multiply by scalar int")
+            raise ValueError("Must multiply by scalar int.")
 
     def __floordiv__(self, __o: int) -> "Vector":
         return Vector(floor(self.x // __o), floor(self.y // __o), floor(self.z // __o))
 
     def copy(self) -> "Vector":
+        """Create a copy of self."""
         return Vector(self.x, self.y, self.z)
 
     def add(self, __o: object) -> None:
-        """add x,y,z to self"""
+        """Add x, y, and z to self."""
         self.x += __o.x
         self.y += __o.y
         self.z += __o.z
 
     def sub(self, __o: object) -> None:
-        """subtract x,y,z from self"""
+        """Subtract x, y, and z from self."""
         self.x -= __o.x
         self.y -= __o.y
         self.z -= __o.z
 
     def dot(self, __o: "Vector") -> int:
-        """Get the dot product of the two Vectors"""
+        """Get the dot product of the two Vectors."""
         return self.x * __o.x + self.y * __o.y + self.z * __o.z
 
     def cross(self, __o: "Vector") -> "Vector":
-        """Get the cross product of the two Vectors"""
+        """Get the cross product of the two Vectors."""
         x = self.y * __o.z - self.z * __o.y
         y = self.z * __o.x - self.x * __o.z
         z = self.x * __o.y - self.y * __o.x
@@ -86,9 +110,11 @@ class Vector:
         return Vector(nbt.tags[0].value, nbt.tags[1].value, nbt.tags[2].value)
 
 
-class Volume(ABC):
+class IVolume(ABC):
+    """An interface from which geometric shapes and other custom volumes can be derived."""
+
     @abstractmethod
-    def __iter__(self) -> "list[Vector]":
+    def __iter__(self) -> "Iterable[Vector]":
         """Iterate over all coordinates within the volume."""
         raise NotImplementedError
 
@@ -113,7 +139,7 @@ class Volume(ABC):
 
     @abstractmethod
     def edge_contains(self, test_pos: Vector) -> bool:
-        """Return true if the input coordinates are on any outside edge of the volume."""
+        """Return true if the input coordinates are on any edge of the volume."""
         raise NotImplementedError
 
     @abstractmethod
@@ -121,15 +147,15 @@ class Volume(ABC):
         """Move the volume. Add delta vector to every point."""
         raise NotImplementedError
 
-    def exterior(self) -> "list[Vector]":
+    def exterior(self) -> "Iterable[Vector]":
         """Get all coordinates along the outside surface of the volume."""
         return [pos.copy() for pos in iter(self) if self.exterior_contains(pos)]
 
-    def interior(self) -> "list[Vector]":
+    def interior(self) -> "Iterable[Vector]":
         """Get all coordinates within the volume that are completely surrounded."""
         return [pos.copy() for pos in iter(self) if self.interior_contains(pos)]
 
-    def edge(self) -> "list[Vector]":
+    def edge(self) -> "Iterable[Vector]":
         """Get all coordinates along the outside edges of the volume."""
         return [pos.copy() for pos in self if self.edge_contains(pos)]
 
@@ -139,11 +165,11 @@ class Volume(ABC):
         new_volume.translate(delta)
         return any(pos for pos in new_volume if self.contains(pos))
 
-    def copy(self) -> "Volume":
+    def copy(self) -> "IVolume":
         return copy.deepcopy(self)
 
 
-class Cuboid(Volume):
+class Cuboid(IVolume):
     """A 3D axis aligned box defined by blocks at two corners.
 
     Methods:
@@ -162,7 +188,7 @@ class Cuboid(Volume):
         super().__init__()
         self.min_corner, self.max_corner = Cuboid.__get_min_max_corners(coord1, coord2)
 
-    def __iter__(self) -> "list[Vector]":
+    def __iter__(self) -> "Iterable[Vector]":
         self.__iter_pos = self.min_corner.copy()
         self.__iter_pos.x -= 1
         return self
@@ -246,7 +272,7 @@ class LineSegment:
     def __init__(self, points: "list[Vector]") -> None:
         self.points = points
 
-    def draw_straight_lines(self) -> "list[Vector]":
+    def draw_straight_lines(self) -> "Iterable[Vector]":
         """Draw a straight line 1 block wide from each point to the next in the list, like connect the dots.
 
         Raises:
