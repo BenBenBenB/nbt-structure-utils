@@ -169,6 +169,67 @@ class IVolume(ABC):
         return copy.deepcopy(self)
 
 
+ADJACENCY_LIST = [
+    Vector(1, 0, 0),
+    Vector(-1, 0, 0),
+    Vector(0, 1, 0),
+    Vector(0, -1, 0),
+    Vector(0, 0, 1),
+    Vector(0, 0, -1),
+]
+
+
+class Volume(IVolume):
+    """A custom volume with manually specified positions."""
+
+    positions: list[Vector]
+
+    def __init__(self, positions: Iterable[Vector]) -> None:
+        super().__init__()
+        self.positions = [pos.copy() for pos in positions]
+
+    def __iter__(self) -> Iterable[Vector]:
+        return iter(self.positions)
+
+    def __next__(self) -> Vector:
+        return self.positions.__next__()
+
+    def __contains__(self, pos: Vector) -> bool:
+        return self.contains(pos)
+
+    def contains(self, test_pos: Vector) -> bool:
+        return test_pos in self.positions
+
+    def exterior_contains(self, test_pos: Vector) -> bool:
+        if not self.contains(test_pos):
+            return False
+        return any(
+            not self.contains(adj_pos)
+            for adj_pos in [test_pos + adj for adj in ADJACENCY_LIST]
+        )
+
+    def interior_contains(self, test_pos: Vector) -> bool:
+        if not self.contains(test_pos):
+            return False
+        return all(
+            self.contains(adj_pos)
+            for adj_pos in [test_pos + adj for adj in ADJACENCY_LIST]
+        )
+
+    def edge_contains(self, test_pos: Vector) -> bool:
+        """For a generic volume, define block as edge if next to 2 or more empty spaces"""
+        if not self.contains(test_pos):
+            return False
+        return [
+            self.contains(adj_pos)
+            for adj_pos in [test_pos + adj for adj in ADJACENCY_LIST]
+        ].count(False) >= 2
+
+    def translate(self, delta: Vector) -> None:
+        for pos in self.positions:
+            pos.add(delta)
+
+
 class Cuboid(IVolume):
     """A 3D axis aligned box defined by blocks at two corners.
 
