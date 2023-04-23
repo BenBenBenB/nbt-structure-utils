@@ -16,7 +16,10 @@ class Enchantment:
     lvl: int
 
     def __init__(self, id: str, lvl: int) -> None:
-        self.id = id
+        if ":" not in id:
+            self.id = "minecraft:" + id
+        else:
+            self.id = id
         self.lvl = lvl
 
     def __eq__(self, __value: object) -> bool:
@@ -73,7 +76,10 @@ class ItemStack:
         enchantments: "list[Enchantment]" = [],
         other_tags: TAG_Compound = None,
     ) -> None:
-        self.id = item_id
+        if ":" not in item_id:
+            self.id = "minecraft:" + item_id
+        else:
+            self.id = item_id
         self.count = count
         self.slot = slot
         self.damage = damage
