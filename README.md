@@ -43,6 +43,7 @@ nbtstructure.get_nbt().write_file(filename="path/to/output/structure_flipped.nbt
 
 ### Edit inventories
 Create an Inventory and save it to desired blocks.
+
 Example: Create a dropper with an enchanted wooden sword in the 5th slot:
 ```python
 from nbt_structure_utils import NBTStructure, Vector, BlockData, Inventory, Enchantment
