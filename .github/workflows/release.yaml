@@ -4,7 +4,7 @@ on:
     types:
       - created
     branches:
-      - 'master'
+      - main
 
 jobs:
   publish-pypi:
