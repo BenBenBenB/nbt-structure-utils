@@ -1,12 +1,14 @@
 name: Release
 on:
-  release:
-    types:
-      - created
+  workflow_dispatch :
+    inputs:
+      environment:
+        description: 'Environment to publish to'
+        type: environment
+        required: true
 
 jobs:
   publish-pypi:
-    if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
@@ -14,10 +16,9 @@ jobs:
         poetry-version: ['1.4.2']
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
-    environment: release
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
       - name: Run image
@@ -26,8 +27,9 @@ jobs:
           poetry-version: ${{ matrix.poetry-version }}
       - name: Publish
         env:
+          PYPI_URL: ${{ vars.PYPI_URL }}
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: |
-          poetry config pypi-token.pypi $PYPI_TOKEN
-          poetry publish --build
-          
+          poetry config repositories.nbtrepo $PYPI_URL
+          poetry config pypi-token.nbtrepo $PYPI_TOKEN
+          poetry publish --build -r nbtrepo
