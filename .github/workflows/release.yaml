@@ -1,9 +1,9 @@
-name: Release
+name: Publish Package
 on:
   workflow_dispatch :
     inputs:
       environment:
-        description: 'Environment to publish to'
+        description: 'Publish to Environment'
         type: environment
         required: true
 
