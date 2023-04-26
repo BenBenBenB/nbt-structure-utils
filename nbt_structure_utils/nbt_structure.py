@@ -336,7 +336,10 @@ class NBTStructure:
         return structure
 
     def get_nbt(
-        self, pressurize: bool = True, trim_excess_air: bool = False
+        self,
+        pressurize: bool = True,
+        trim_excess_air: bool = False,
+        align_to_origin: bool = True,
     ) -> NBTFile:
         """Create NBTFile representation of self.
 
@@ -345,6 +348,7 @@ class NBTStructure:
         Args:
             pressurize (bool, optional): Replace empty space with air blocks. Defaults to True.
             trim_excess_air (bool, optional): Minimize size by removing air outside of smallest cuboid. Defaults to False.
+            align_to_origin (bool, optional): Move all blocks so that the minimum corner is at 0,0,0
 
         Returns:
             NBTFile: the complete NBT representation of the structure.
@@ -357,7 +361,8 @@ class NBTStructure:
             working_copy.crop(Cuboid(min_coords, max_coords))
         if pressurize:
             working_copy.pressurize(Cuboid(min_coords, max_coords))
-        working_copy.translate(min_coords * -1)
+        if align_to_origin:
+            working_copy.translate(min_coords * -1)
         working_copy.cleanse_palette()
 
         # generate file from copy
