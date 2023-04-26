@@ -2,9 +2,10 @@ import copy
 from collections.abc import Iterable
 from contextlib import suppress
 
+import numpy as np
 from nbt.nbt import NBTFile, TAG_Compound, TAG_Int, TAG_List, TAG_String
 
-from .blocks import BlockData
+from .blocks import X_AXIS, Y_AXIS, Z_AXIS, BlockData
 from .items import Inventory
 from .shapes import Cuboid, IVolume, Vector
 
@@ -23,6 +24,7 @@ class Palette:
         extend(blocks): Adds any blocks not in palette.
         copy(): Return a copy of this palette.
         reflect(reflector): Reflect block states across different planes.
+        rotate(axis, angle): Rotate all states by angle around specified axis.
         get_nbt(): Get TAG_List representation of palette.
     """
 
@@ -112,6 +114,16 @@ class Palette:
                 reflector.y is not None,
                 reflector.z is not None,
             )
+
+    def rotate(self, axis: str, angle: int) -> None:
+        """Rotate all states by angle around specified axis.
+
+        Args:
+            axis (str): The axis to rotate around
+            angle (int): The angle in degrees.
+        """
+        for block in self.__blocks:
+            block.rotate(axis, angle)
 
 
 class BlockPosition:
@@ -242,6 +254,8 @@ class NBTStructure:
             Move entire structure by some distance.
         reflect(reflector):
             Mirror the structure over specific planes.
+        rotate(axis, angle):
+            Rotate all positions and states by angle around specified axis
         pressurize(volume):
             Replace all empty spaces with air blocks.
         depressurize(volume):
@@ -322,7 +336,10 @@ class NBTStructure:
         return structure
 
     def get_nbt(
-        self, pressurize: bool = True, trim_excess_air: bool = False
+        self,
+        pressurize: bool = True,
+        trim_excess_air: bool = False,
+        align_to_origin: bool = True,
     ) -> NBTFile:
         """Create NBTFile representation of self.
 
@@ -331,6 +348,7 @@ class NBTStructure:
         Args:
             pressurize (bool, optional): Replace empty space with air blocks. Defaults to True.
             trim_excess_air (bool, optional): Minimize size by removing air outside of smallest cuboid. Defaults to False.
+            align_to_origin (bool, optional): Move all blocks so that the minimum corner is at 0,0,0
 
         Returns:
             NBTFile: the complete NBT representation of the structure.
@@ -343,7 +361,8 @@ class NBTStructure:
             working_copy.crop(Cuboid(min_coords, max_coords))
         if pressurize:
             working_copy.pressurize(Cuboid(min_coords, max_coords))
-        working_copy.translate(min_coords * -1)
+        if align_to_origin:
+            working_copy.translate(min_coords * -1)
         working_copy.cleanse_palette()
 
         # generate file from copy
@@ -541,6 +560,46 @@ class NBTStructure:
         if reflector.z is not None:
             new_pos.z = 2 * reflector.z - pos.z
         return new_pos
+
+    def rotate(self, axis: str, angle: int) -> None:
+        """Rotate the blocks and states around an axis by an angle.
+
+        The positive angle direction is determined by the right-hand rule, unlike Minecraft.
+        This means 90 degrees here is 270 in the structure block UI and vice versa.
+        Facing directly east (+x), up (+y), or south (+z), positive rotation is clockwise.
+
+        Parameters:
+            axis(str): Choose to rotate around the x,y or z azis.
+            angle(int): Rotation angle, in degrees. Must be multiple of 90.
+        """
+        if axis not in [X_AXIS, Y_AXIS, Z_AXIS]:
+            raise ValueError("Must choose valid axis")
+        if not angle % 90 == 0:
+            raise ValueError("Must choose multiple of 90 degrees.")
+        angle = angle % 360
+        if angle == 0:
+            return
+        rotation: "dict(int,BlockPosition)" = {}
+        for block in self.blocks.values():
+            new_pos = self.__get_rotated_pos(block.pos, axis, angle)
+            block.pos = new_pos
+            rotation[new_pos] = block
+        self.blocks = rotation
+        self.palette.rotate(axis, angle)
+
+    def __get_rotated_pos(self, pos: Vector, axis: str, angle: int) -> Vector:
+        """Hit it with a rotation matrix."""
+        original_pos = np.array((pos.x, pos.y, pos.z))
+        theta = np.radians(angle)
+        c, s = np.cos(theta), np.sin(theta)
+        if axis == X_AXIS:
+            rotation_matrix = np.array([(1, 0, 0), (0, c, -s), (0, s, c)], dtype=int)
+        if axis == Y_AXIS:
+            rotation_matrix = np.array([(c, 0, s), (0, 1, 0), (-s, 0, c)], dtype=int)
+        if axis == Z_AXIS:
+            rotation_matrix = np.array([(c, -s, 0), (s, c, 0), (0, 0, 1)], dtype=int)
+        new_pos = np.matmul(rotation_matrix, original_pos)
+        return Vector(new_pos[0], new_pos[1], new_pos[2])
 
     def clone_structure(
         self,

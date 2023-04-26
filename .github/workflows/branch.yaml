@@ -1,12 +1,12 @@
-name: Push
-on: [push, pull_request]
+name: Code Quality
+on: push
 
 jobs:
   test:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
         poetry-version: ['1.4.2']
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
