@@ -1,8 +1,8 @@
-# NBTStructureUtils
+# NBT Structure Utils
 
 > A python library to create and edit NBT structure files for Minecraft.
 
-This has been tested with Minecraft version 1.19.3.
+This has been tested with Minecraft Java, version 1.19.3.
 
 **Features**
 
@@ -12,6 +12,8 @@ This has been tested with Minecraft version 1.19.3.
 - Special classes to help fill Cuboids and draw straight lines.
 
 ## Basic Usage
+See class docstrings for finer details and lists of methods.
+
 ### Minecraft NBT Structure
 This library creates .nbt files that can be placed in minecraft worlds. with a Structure Block or structure command. 
 
@@ -21,12 +23,12 @@ See the minecraft wiki for details on each:
 
 
 ### Edit blocks
-Basic Example: create a 5x5x5 hollow cube of stone and save to file:
+Basic Example: create a 5x5x5 cube of stone and save to file:
 ```python
 from nbt_structure_utils import NBTStructure, Vector, Cuboid, BlockData
 nbtstructure = NBTStructure()
 c1, c2 = Vector(0, 0, 0), Vector(4, 4, 4)
-nbtstructure.fill_hollow(Cuboid(c1, c2), BlockData("stone"))
+nbtstructure.fill(Cuboid(c1, c2), BlockData("stone"))
 nbtstructure.get_nbt().write_file(filename="path/to/output/hollow_box.nbt")
 ```
 

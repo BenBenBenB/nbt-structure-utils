@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nbt-structure-utils"
-version = "0.2.1"
+version = "0.3.0"
 description = "Create, read, and edit Minecraft NBT structure files."
 authors = ["Ben Burton <benjaminburtondev@gmail.com>"]
 license = "MIT"
